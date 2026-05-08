@@ -4,30 +4,30 @@ import requests
 from urllib.parse import urlparse
 from datetime import datetime
 
-BRAND_KEYWORDS = [
+BRANDS = [
     "facebook", "google", "paypal",
     "apple", "microsoft", "amazon",
-    "instagram", "netflix", "bank", "login", "secure"
-]
-
-LEGIT_DOMAINS = [
-    "facebook.com", "google.com", "paypal.com",
-    "apple.com", "microsoft.com", "amazon.com",
-    "instagram.com", "netflix.com"
+    "instagram", "netflix"
 ]
 
 
-def analyze_url(url: str):
+def normalize_url(url):
     if not url.startswith(("http://", "https://")):
-        url = "http://" + url
+        return "https://" + url
+    return url
 
+
+def analyze_url(url):
+    url = normalize_url(url)
     parsed = urlparse(url)
+
     domain = parsed.netloc
 
     result = {
         "url": url,
         "domain": domain,
         "ip": None,
+        "final_url": None,
         "ssl_expiry": None,
         "issues": []
     }
@@ -38,58 +38,60 @@ def analyze_url(url: str):
     except:
         result["issues"].append("DNS lookup failed (domain may not exist)")
 
-    # ---------------- IP BASED URL ----------------
+    # ---------------- IP DETECTION ----------------
     try:
         socket.inet_aton(domain.split(":")[0])
-        result["issues"].append("Uses raw IP address instead of domain name")
+        result["issues"].append("Raw IP address used instead of domain")
     except:
         pass
 
-    # ---------------- BRAND SPOOF CHECK ----------------
-    for word in BRAND_KEYWORDS:
-        if word in domain.lower():
-            if not any(domain.endswith(ld) for ld in LEGIT_DOMAINS):
-                result["issues"].append(
-                    f"Suspicious brand keyword used: '{word}'"
-                )
+    # ---------------- BRAND SPOOFING ----------------
+    for b in BRANDS:
+        if b in domain.lower() and not domain.endswith(b + ".com"):
+            result["issues"].append(f"Possible brand impersonation: {b}")
 
-    # ---------------- DOMAIN PATTERN CHECK ----------------
+    # ---------------- DOMAIN PATTERN ----------------
     if domain.count("-") > 2:
-        result["issues"].append("Too many hyphens (common in phishing URLs)")
+        result["issues"].append("Excessive hyphens detected")
 
     if len(domain) > 40:
         result["issues"].append("Unusually long domain name")
 
-    # ---------------- HTTP CHECK ----------------
+    # ---------------- REQUEST (REDIRECT SAFE) ----------------
     try:
-        res = requests.get(url, timeout=5)
+        res = requests.get(url, timeout=6, allow_redirects=True)
+        result["final_url"] = res.url
+
         if res.status_code >= 400:
             result["issues"].append(f"HTTP error: {res.status_code}")
+
     except requests.exceptions.SSLError:
-        result["issues"].append("SSL certificate problem")
+        result["issues"].append("SSL certificate error")
+
     except requests.exceptions.ConnectionError:
-        result["issues"].append("Website is not reachable")
+        result["issues"].append("Website not reachable")
+
     except:
-        result["issues"].append("Unknown connection error")
+        result["issues"].append("Unknown connection issue")
 
     # ---------------- SSL CHECK ----------------
-    if parsed.scheme == "https":
-        try:
-            hostname = domain.split(":")[0]
-            ctx = ssl.create_default_context()
+    try:
+        host = urlparse(result["final_url"]).netloc if result["final_url"] else domain
 
-            with socket.create_connection((hostname, 443), timeout=5) as sock:
-                with ctx.wrap_socket(sock, server_hostname=hostname) as ssock:
-                    cert = ssock.getpeercert()
-                    expiry = datetime.strptime(
-                        cert["notAfter"],
-                        "%b %d %H:%M:%S %Y %Z"
-                    )
-                    result["ssl_expiry"] = expiry.strftime("%Y-%m-%d")
+        ctx = ssl.create_default_context()
 
-        except:
-            result["issues"].append("Could not read SSL certificate")
-    else:
-        result["issues"].append("Website does not use HTTPS")
+        with socket.create_connection((host, 443), timeout=5) as sock:
+            with ctx.wrap_socket(sock, server_hostname=host) as ssock:
+                cert = ssock.getpeercert()
+
+                expiry = datetime.strptime(
+                    cert["notAfter"],
+                    "%b %d %H:%M:%S %Y %Z"
+                )
+
+                result["ssl_expiry"] = expiry.strftime("%Y-%m-%d")
+
+    except:
+        result["issues"].append("SSL info not available or invalid HTTPS")
 
     return result

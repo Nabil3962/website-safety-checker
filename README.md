@@ -127,4 +127,9 @@ It is NOT a real antivirus, penetration testing framework, or guaranteed phishin
 The scanner only performs basic analysis and may produce false positives or miss advanced threats.
 
 Always use professional security tools and browser protection for real-world security.
+
 ---
+
+# 👨‍💻 Author
+
+Developed as a beginner cybersecurity and web security learning project.

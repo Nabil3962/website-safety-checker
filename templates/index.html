@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Website Safety Checker</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="container">
+
+    <h1>Website Safety Checker</h1>
+
+    <form method="POST">
+
+        <input
+            type="text"
+            name="url"
+            placeholder="Enter website URL..."
+            required
+        >
+
+        <button type="submit">Analyze</button>
+
+    </form>
+
+    {% if result %}
+
+    <div class="result">
+
+        <h2>Analysis Report</h2>
+
+        <p><strong>Website:</strong> {{ result.url }}</p>
+        <p><strong>Domain:</strong> {{ result.domain }}</p>
+
+        <p>
+            <strong>Resolved IP:</strong>
+
+            {% if result.resolved_ip %}
+                {{ result.resolved_ip }}
+            {% else %}
+                Not Available
+            {% endif %}
+        </p>
+
+        <p>
+            <strong>SSL Expiry:</strong>
+
+            {% if result.ssl_expiry %}
+                {{ result.ssl_expiry }}
+            {% else %}
+                Not Available
+            {% endif %}
+        </p>
+
+        {% if result.issues %}
+
+            <div class="danger">
+
+                <h3>Possible Problems Found</h3>
+
+                <ul>
+                    {% for issue in result.issues %}
+                        <li>{{ issue }}</li>
+                    {% endfor %}
+                </ul>
+
+            </div>
+
+        {% else %}
+
+            <div class="safe">
+
+                <h3>No obvious suspicious signs detected.</h3>
+
+            </div>
+
+        {% endif %}
+
+    </div>
+
+    {% endif %}
+
+</div>
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+
+</body>
+</html>
